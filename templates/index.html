@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Распознавание рукописных цифр</title>
+    <style>
+        #canvas {
+            border: 1px solid black;
+            touch-action: none; /* Это позволяет рисовать на канвасе на мобильных устройствах */
+        }
+        button {
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="canvas" width="280" height="280"></canvas>
+    <button onclick="clearCanvas()">Очистить</button>
+    <button onclick="predict()">Распознать</button>
+    <button onclick="saveCanvas()">Сохранить</button>
+
+    <p>Предсказание: <span id="prediction"></span></p>
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        let isDrawing = false;
+
+        canvas.addEventListener('mousedown', startDrawing);
+        canvas.addEventListener('mouseup', stopDrawing);
+        canvas.addEventListener('mousemove', draw);
+        canvas.addEventListener('mouseleave', stopDrawing);
+
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            startDrawing(e.touches[0]);
+        });
+        canvas.addEventListener('touchend', stopDrawing);
+        canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            draw(e.touches[0]);
+        });
+
+        function startDrawing(e) {
+            isDrawing = true;
+            ctx.beginPath();
+            ctx.moveTo(e.clientX - canvas.offsetLeft, e.clientY - canvas.offsetTop);
+        }
+
+        function draw(e) {
+            if (!isDrawing) return;
+            ctx.lineTo(e.clientX - canvas.offsetLeft, e.clientY - canvas.offsetTop);
+            ctx.lineWidth = 50;
+            ctx.stroke();
+        }
+
+        function stopDrawing() {
+            isDrawing = false;
+        }
+
+        function clearCanvas() {
+            ctx.fillStyle = "white";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+
+        function saveCanvas() {
+    const scaledCanvas = document.createElement('canvas');
+    const scaledCtx = scaledCanvas.getContext('2d');
+    scaledCanvas.width = 28;
+    scaledCanvas.height = 28;
+
+    scaledCtx.drawImage(canvas, 0, 0, canvas.width, canvas.height, 0, 0, 28, 28);
+    scaledCanvas.toBlob(function(blob) {
+        const formData = new FormData();
+        formData.append('image', blob);
+
+        fetch('/save', {
+            method: 'POST',
+            body: formData,
+        })
+        .then(response => response.json())
+        .then(data => {
+            console.log('Сохранено', data);
+        })
+        .catch(error => console.error('Ошибка:', error));
+    });
+}
+
+
+        function predict() {
+            const scaledCanvas = document.createElement('canvas');
+            const scaledCtx = scaledCanvas.getContext('2d');
+            scaledCanvas.width = 28;
+            scaledCanvas.height = 28;
+
+            // Уменьшаем и преобразуем изображение
+            scaledCtx.drawImage(canvas, 0, 0, canvas.width, canvas.height, 0, 0, 28, 28);
+            const imageData = scaledCtx.getImageData(0, 0, 28, 28);
+            for (let i = 0; i < imageData.data.length; i += 4) {
+                const avg = (imageData.data[i] + imageData.data[i + 1] + imageData.data[i + 2]) / 3;
+                imageData.data[i] = imageData.data[i + 1] = imageData.data[i + 2] = avg; // Устанавливаем одинаковое значение для RGB
+            }
+            scaledCtx.putImageData(imageData, 0, 0);
+
+            scaledCanvas.toBlob(function(blob) {
+                const formData = new FormData();
+                formData.append('image', blob);
+
+                fetch('/predict', {
+                    method: 'POST',
+                    body: formData,
+                })
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('prediction').innerText = data.prediction;
+                })
+                .catch(error => console.error('Ошибка:', error));
+            });
+        }
+    </script>
+</body>
+</html>
+
